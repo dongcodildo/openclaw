@@ -1,6 +1,31 @@
 services:
+  nordvpn:
+    image: ghcr.io/bubuntux/nordvpn
+    cap_add:
+      - NET_ADMIN
+    environment:
+      TOKEN: ${NORDVPN_TOKEN}
+      TECHNOLOGY: NordLynx
+    sysctls:
+      - net.ipv4.conf.all.rp_filter=2
+    ports:
+      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+      - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+      - "${VIKUNJA_PORT:-3456}:3456"
+    restart: unless-stopped
+
+  sandbox-browser:
+    build:
+      context: .
+      dockerfile: Dockerfile.sandbox-browser
+    image: openclaw-sandbox-browser:local
+    network_mode: "service:nordvpn"
+    depends_on:
+      - nordvpn
+    restart: unless-stopped
+
   openclaw-gateway:
-    image: ${OPENCLAW_IMAGE:-openclaw:local}
+    image: ${OPENCLAW_IMAGE:-openclaw:dongco}
     environment:
       HOME: /home/node
       TERM: xterm-256color
@@ -8,12 +33,23 @@ services:
       CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY}
       CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY}
       CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE}
+      PROTON_HARDY_USER: ${PROTON_HARDY_USER}
+      PROTON_HARDY_PASS: ${PROTON_HARDY_PASS}
+      PROTON_ROD_USER: ${PROTON_ROD_USER}
+      PROTON_ROD_PASS: ${PROTON_ROD_PASS}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      NETLIFY_TOKEN: ${NETLIFY_TOKEN}
+      DYNADOT_API_KEY: ${DYNADOT_API_KEY}
+      X_USERNAME: ${X_USERNAME}
+      X_PASSWORD: ${X_PASSWORD}
+      VLLM_URL: ${VLLM_URL}
     volumes:
-      - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
-      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
-    ports:
-      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
-      - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+      - openclaw-gateway-data:/home/node/.openclaw
+    network_mode: "service:nordvpn"
+    depends_on:
+      - nordvpn
+      - signal-cli
+      - sandbox-browser
     init: true
     restart: unless-stopped
     command:
@@ -38,9 +74,74 @@ services:
       CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY}
       CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE}
     volumes:
-      - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
-      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
+      - openclaw-gateway-data:/home/node/.openclaw
+    network_mode: "service:nordvpn"
+    depends_on:
+      - nordvpn
     stdin_open: true
     tty: true
     init: true
     entrypoint: ["node", "dist/index.js"]
+
+  signal-cli:
+    image: signal-cli:latest
+    network_mode: "service:nordvpn"
+    depends_on:
+      - nordvpn
+    restart: unless-stopped
+    command: ["daemon", "--http=0.0.0.0:8080"]
+    volumes:
+      - signal-cli-data:/var/lib/signal-cli
+
+  vikunja:
+    image: vikunja/vikunja:latest
+    environment:
+      VIKUNJA_DATABASE_TYPE: sqlite
+      VIKUNJA_DATABASE_PATH: /app/vikunja/vikunja.db
+      VIKUNJA_SERVICE_JWTSECRET: ${VIKUNJA_JWT_SECRET}
+      VIKUNJA_SERVICE_FRONTENDURL: http://localhost:3456/
+    volumes:
+      - vikunja-data:/app/vikunja
+    network_mode: "service:nordvpn"
+    depends_on:
+      - nordvpn
+    restart: unless-stopped
+
+  vllm:
+    build:
+      context: /home/deklov/vllm/vllm-docker
+      dockerfile: Dockerfile.rtx5070
+    image: vllm-rtx5070:latest
+    runtime: nvidia
+    network_mode: "service:nordvpn"
+    depends_on:
+      - nordvpn
+    restart: unless-stopped
+    volumes:
+      - vllm-models:/root/.cache/huggingface
+    ipc: host
+    shm_size: '16gb'
+    environment:
+      HF_HOME: /root/.cache/huggingface
+      NVIDIA_VISIBLE_DEVICES: all
+      VLLM_USE_V1: "0"
+      HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
+      PYTORCH_ALLOC_CONF: expandable_segments:True
+    command:
+      - --model=Qwen/Qwen2.5-7B-Instruct-AWQ
+      - --host=0.0.0.0
+      - --port=11434
+      - --gpu-memory-utilization=0.8
+      - --quantization=awq
+      - --max-model-len=16384
+
+volumes:
+  openclaw-gateway-data:
+    name: dongco-openclaw-gateway-data
+  signal-cli-data:
+    name: dongco-signal-cli-data
+  vikunja-data:
+    name: dongco-vikunja-data
+  vllm-models:
+    external: true
+    name: vllm-models
