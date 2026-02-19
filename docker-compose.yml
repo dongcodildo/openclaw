@@ -100,6 +100,11 @@ services:
       VIKUNJA_DATABASE_PATH: /app/vikunja/vikunja.db
       VIKUNJA_SERVICE_JWTSECRET: ${VIKUNJA_JWT_SECRET}
       VIKUNJA_SERVICE_FRONTENDURL: http://localhost:3456/
+      VIKUNJA_SERVICE_ENABLEREGISTRATION: ${VIKUNJA_ENABLE_REGISTRATION:-true}
+      # User passwords (used by Plato to seed accounts via API on first run)
+      VIKUNJA_PLATO_PASSWORD: ${VIKUNJA_PLATO_PASSWORD}
+      VIKUNJA_HARDY_PASSWORD: ${VIKUNJA_HARDY_PASSWORD}
+      VIKUNJA_ROD_PASSWORD: ${VIKUNJA_ROD_PASSWORD}
     volumes:
       - vikunja-data:/app/vikunja
     network_mode: "service:nordvpn"
