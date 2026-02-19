@@ -25,6 +25,9 @@ services:
     restart: unless-stopped
 
   openclaw-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.dongco
     image: ${OPENCLAW_IMAGE:-openclaw:dongco}
     environment:
       HOME: /home/node
@@ -43,6 +46,11 @@ services:
       X_USERNAME: ${X_USERNAME}
       X_PASSWORD: ${X_PASSWORD}
       VLLM_URL: ${VLLM_URL}
+    secrets:
+      - dongco_email
+      - dongco_password
+      - operational_account
+      - treasury_account
     volumes:
       - openclaw-gateway-data:/home/node/.openclaw
     network_mode: "service:nordvpn"
@@ -139,6 +147,16 @@ services:
       - --gpu-memory-utilization=0.8
       - --quantization=awq
       - --max-model-len=16384
+
+secrets:
+  dongco_email:
+    file: /home/deklov/dongco/.secrets/dongco_email.txt
+  dongco_password:
+    file: /home/deklov/dongco/.secrets/dongco_password.txt
+  operational_account:
+    file: /home/deklov/dongco/.secrets/operational_account.json
+  treasury_account:
+    file: /home/deklov/dongco/.secrets/treasury_account.json
 
 volumes:
   openclaw-gateway-data:

@@ -1,0 +1,11 @@
+FROM openclaw:local
+
+USER root
+
+# System packages
+RUN apt-get update     && apt-get install -y --no-install-recommends         python3-pip         trash-cli         jq         imagemagick     && rm -rf /var/lib/apt/lists/*
+
+# Python packages for integrations
+RUN pip3 install --break-system-packages     proton-api-client     pgpy     requests     beautifulsoup4     lxml     Pillow
+
+USER node
