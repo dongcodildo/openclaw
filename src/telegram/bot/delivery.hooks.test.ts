@@ -147,4 +147,19 @@ describe("deliverReplies – message_sending / message_sent hooks", () => {
     await expect(deliver(bot, runner)).resolves.toBeDefined();
     expect(sendMessage).toHaveBeenCalledTimes(1);
   });
+
+  it("fires message_sent with success: false and error when sendMessage throws", async () => {
+    const errorMsg = "telegram send failure";
+    const sendMessage = vi.fn().mockRejectedValue(new Error(errorMsg));
+    const bot = createBot({ sendMessage });
+    const runner = createFakeRunner({});
+
+    await expect(deliver(bot, runner)).rejects.toThrow();
+    await flush();
+
+    expect(runner.runMessageSent).toHaveBeenCalledWith(
+      expect.objectContaining({ to: CHAT_ID, success: false, error: errorMsg }),
+      { channelId: "telegram" },
+    );
+  });
 });

@@ -149,34 +149,40 @@ export async function deliverReplies(params: {
     }
 
     if (mediaList.length === 0) {
-      const chunks = chunkText(reply.text || "");
-      let sentTextChunk = false;
-      for (let i = 0; i < chunks.length; i += 1) {
-        const chunk = chunks[i];
-        if (!chunk) {
-          continue;
+      try {
+        const chunks = chunkText(reply.text || "");
+        let sentTextChunk = false;
+        for (let i = 0; i < chunks.length; i += 1) {
+          const chunk = chunks[i];
+          if (!chunk) {
+            continue;
+          }
+          // Only attach buttons to the first chunk.
+          const shouldAttachButtons = i === 0 && replyMarkup;
+          await sendTelegramText(bot, chatId, chunk.html, runtime, {
+            replyToMessageId: replyToMessageIdForPayload,
+            replyQuoteText,
+            thread,
+            textMode: "html",
+            plainText: chunk.text,
+            linkPreview,
+            replyMarkup: shouldAttachButtons ? replyMarkup : undefined,
+          });
+          sentTextChunk = true;
+          markDelivered();
         }
-        // Only attach buttons to the first chunk.
-        const shouldAttachButtons = i === 0 && replyMarkup;
-        await sendTelegramText(bot, chatId, chunk.html, runtime, {
-          replyToMessageId: replyToMessageIdForPayload,
-          replyQuoteText,
-          thread,
-          textMode: "html",
-          plainText: chunk.text,
-          linkPreview,
-          replyMarkup: shouldAttachButtons ? replyMarkup : undefined,
-        });
-        sentTextChunk = true;
-        markDelivered();
+        if (replyToMessageIdForPayload && !hasReplied && sentTextChunk) {
+          hasReplied = true;
+        }
+        emitSent(replyContent, true);
+      } catch (err) {
+        emitSent(replyContent, false, err instanceof Error ? err.message : String(err));
+        throw err;
       }
-      if (replyToMessageIdForPayload && !hasReplied && sentTextChunk) {
-        hasReplied = true;
-      }
-      emitSent(replyContent, true);
       continue;
     }
     // media with optional caption on first item
+    try {
     let first = true;
     // Track if we need to send a follow-up text message after media
     // (when caption exceeds Telegram's 1024-char limit)
@@ -331,6 +337,10 @@ export async function deliverReplies(params: {
       }
     }
     emitSent(replyContent, true);
+    } catch (err) {
+      emitSent(replyContent, false, err instanceof Error ? err.message : String(err));
+      throw err;
+    }
   }
 
   return { delivered: hasDelivered };
