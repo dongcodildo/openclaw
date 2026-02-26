@@ -4,6 +4,7 @@ import type { ReplyPayload } from "../../auto-reply/types.js";
 import type { ReplyToMode } from "../../config/config.js";
 import type { MarkdownTableMode } from "../../config/types.base.js";
 import { danger, logVerbose, warn } from "../../globals.js";
+import { getGlobalHookRunner } from "../../plugins/hook-runner-global.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { retryAsync } from "../../infra/retry.js";
 import { mediaKindFromMime } from "../../media/constants.js";
@@ -79,6 +80,16 @@ export async function deliverReplies(params: {
   const markDelivered = () => {
     hasDelivered = true;
   };
+  const hookRunner = getGlobalHookRunner();
+  const emitSent = (content: string, success: boolean, error?: string) => {
+    if (!hookRunner?.hasHooks("message_sent")) return;
+    void hookRunner
+      .runMessageSent(
+        { to: chatId, content, success, ...(error ? { error } : {}) },
+        { channelId: "telegram" },
+      )
+      .catch(() => {});
+  };
   const chunkText = (markdown: string) => {
     const markdownChunks =
       chunkMode === "newline"
@@ -122,6 +133,21 @@ export async function deliverReplies(params: {
       | { buttons?: TelegramInlineButtons }
       | undefined;
     const replyMarkup = buildInlineKeyboard(telegramData?.buttons);
+
+    // Fire message_sending hook (may cancel delivery of this reply)
+    const replyContent = reply.text ?? "";
+    if (hookRunner?.hasHooks("message_sending")) {
+      try {
+        const sendingResult = await hookRunner.runMessageSending(
+          { to: chatId, content: replyContent, metadata: { channel: "telegram" } },
+          { channelId: "telegram" },
+        );
+        if (sendingResult?.cancel) continue;
+      } catch {
+        // Don't block delivery on hook failure
+      }
+    }
+
     if (mediaList.length === 0) {
       const chunks = chunkText(reply.text || "");
       let sentTextChunk = false;
@@ -147,6 +173,7 @@ export async function deliverReplies(params: {
       if (replyToMessageIdForPayload && !hasReplied && sentTextChunk) {
         hasReplied = true;
       }
+      emitSent(replyContent, true);
       continue;
     }
     // media with optional caption on first item
@@ -303,6 +330,7 @@ export async function deliverReplies(params: {
         hasReplied = true;
       }
     }
+    emitSent(replyContent, true);
   }
 
   return { delivered: hasDelivered };
