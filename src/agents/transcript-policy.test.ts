@@ -64,6 +64,34 @@ describe("resolveTranscriptPolicy", () => {
     expect(policy.allowSyntheticToolResults).toBe(true);
     expect(policy.sanitizeToolCallIds).toBe(true);
     expect(policy.sanitizeMode).toBe("full");
+    expect(policy.dropThinkingBlocks).toBe(true);
+  });
+
+  it("drops thinking blocks for Anthropic provider", () => {
+    const policy = resolveTranscriptPolicy({
+      provider: "anthropic",
+      modelId: "claude-opus-4-5",
+      modelApi: "anthropic-messages",
+    });
+    expect(policy.dropThinkingBlocks).toBe(true);
+  });
+
+  it("drops thinking blocks for Copilot Claude", () => {
+    const policy = resolveTranscriptPolicy({
+      provider: "github-copilot",
+      modelId: "claude-opus-4-5",
+      modelApi: "anthropic-messages",
+    });
+    expect(policy.dropThinkingBlocks).toBe(true);
+  });
+
+  it("does not drop thinking blocks for non-Anthropic providers", () => {
+    const policy = resolveTranscriptPolicy({
+      provider: "openai",
+      modelId: "gpt-4o",
+      modelApi: "openai",
+    });
+    expect(policy.dropThinkingBlocks).toBe(false);
   });
 
   it("keeps OpenRouter on its existing turn-validation path", () => {
